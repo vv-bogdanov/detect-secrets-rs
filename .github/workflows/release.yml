@@ -117,7 +117,7 @@ jobs:
             --out-dir npm-packages
           tar -C release-bin -czf "artifacts/detect-secrets-rs-$TARGET_KEY.tar.gz" .
           PACKAGE_NAME="$(node -e "const targets=require('./npm/prebuilt-targets.json'); process.stdout.write(targets[process.env.TARGET_KEY].packageName)")"
-          npm pack --json "npm-packages/$PACKAGE_NAME" --pack-destination artifacts
+          npm pack --json "./npm-packages/$PACKAGE_NAME" --pack-destination artifacts
       - name: Publish or dry-run npm platform package
         shell: bash
         env:
@@ -126,7 +126,7 @@ jobs:
         run: |
           set -euo pipefail
           PACKAGE_NAME="$(node -e "const targets=require('./npm/prebuilt-targets.json'); process.stdout.write(targets[process.env.TARGET_KEY].packageName)")"
-          PACKAGE_DIR="npm-packages/$PACKAGE_NAME"
+          PACKAGE_DIR="./npm-packages/$PACKAGE_NAME"
           if [[ "$PUBLISH" == "true" ]]; then
             npm publish --provenance --access public "$PACKAGE_DIR"
           else
