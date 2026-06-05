@@ -40,6 +40,7 @@ jobs:
       - run: python scripts/assert-release-version.py
         env:
           REQUIRE_RELEASE_TAG: ${{ env.PUBLISH }}
+      - run: python3 scripts/cli-parity.py
       - name: Validate publish credentials
         if: env.PUBLISH == 'true'
         env:

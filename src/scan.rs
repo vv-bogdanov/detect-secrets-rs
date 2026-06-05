@@ -18,15 +18,26 @@ pub struct ScanResult {
     pub filters_used: Vec<String>,
 }
 
+/// Per-plugin result for `scan --string`.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StringScanVerdict {
+    pub plugin_name: String,
+    pub detected: bool,
+}
+
 /// Run file discovery, filters, detectors, and deterministic result sorting.
 pub fn scan(options: &ScanOptions) -> Result<ScanResult> {
     let filters = CompiledFilters::new(options)?;
-    let detectors = DetectorSet::new(&options.disabled_plugins)?;
+    let detectors = DetectorSet::new_with_limits(
+        &options.disabled_plugins,
+        options.base64_limit,
+        options.hex_limit,
+    )?;
     let files = crate::files::discover(options, &filters)?;
 
     let mut findings = files
         .par_iter()
-        .flat_map(|file| scan_file(file, &detectors, &filters))
+        .flat_map(|file| scan_file(file, &detectors, &filters, options.only_allowlisted))
         .collect::<Vec<_>>();
 
     findings.sort();
@@ -37,6 +48,36 @@ pub fn scan(options: &ScanOptions) -> Result<ScanResult> {
         plugins_used: detectors.plugin_names(),
         filters_used: filters.names(),
     })
+}
+
+/// Scan an ad-hoc string and return detector verdicts without exposing secrets.
+pub fn scan_string(line: &str, options: &ScanOptions) -> Result<Vec<StringScanVerdict>> {
+    let filters = CompiledFilters::new(options)?;
+    let detectors = DetectorSet::new_with_limits(
+        &options.disabled_plugins,
+        options.base64_limit,
+        options.hex_limit,
+    )?;
+    let mut detected = Vec::<String>::new();
+
+    if !filters.is_line_excluded(line) {
+        detectors.visit_line("adhoc-string-scan", line, |detector_name, _, secret| {
+            if !filters.is_secret_excluded(secret)
+                && !detected.iter().any(|name| name == detector_name)
+            {
+                detected.push(detector_name.to_string());
+            }
+        });
+    }
+
+    Ok(detectors
+        .plugin_names()
+        .into_iter()
+        .map(|plugin_name| StringScanVerdict {
+            detected: detected.iter().any(|name| name == &plugin_name),
+            plugin_name,
+        })
+        .collect())
 }
 
 /// Compiled regex filters shared by discovery and scanning.
@@ -103,6 +144,7 @@ fn scan_file(
     file: &SourceFile,
     detectors: &DetectorSet,
     filters: &CompiledFilters,
+    only_allowlisted: bool,
 ) -> Vec<Finding> {
     let mut findings = Vec::new();
     let mut filename = None::<Arc<str>>;
@@ -110,12 +152,20 @@ fn scan_file(
 
     for (line_idx, line) in file.content.lines().enumerate() {
         let has_pragma = line.contains("pragma");
-        let allowlisted = previous_allowlisted_nextline
+        let line_allowlisted = previous_allowlisted_nextline
             || (has_pragma && line.contains("pragma: allowlist secret"));
         previous_allowlisted_nextline =
             has_pragma && line.contains("pragma: allowlist nextline secret");
 
-        if allowlisted || filters.is_line_excluded(line) {
+        if filters.is_line_excluded(line) {
+            continue;
+        }
+
+        if only_allowlisted {
+            if !line_allowlisted {
+                continue;
+            }
+        } else if line_allowlisted {
             continue;
         }
 
@@ -138,7 +188,7 @@ fn to_finding(filename: Arc<str>, line_number: usize, secret_type: &str, secret:
         filename,
         hashed_secret: hash_secret(secret),
         is_verified: false,
-        line_number,
+        line_number: Some(line_number),
     }
 }
 
@@ -168,10 +218,13 @@ mod tests {
         let filters = CompiledFilters::new(&ScanOptions {
             paths: vec![".".into()],
             all_files: true,
+            only_allowlisted: false,
             exclude_files: Vec::new(),
             exclude_lines: Vec::new(),
             exclude_secrets: Vec::new(),
             disabled_plugins: Vec::new(),
+            base64_limit: None,
+            hex_limit: None,
             no_verify: false,
         })
         .unwrap();
@@ -181,7 +234,8 @@ mod tests {
                 .to_string(),
         };
 
-        assert!(scan_file(&file, &detectors, &filters).is_empty());
+        assert!(scan_file(&file, &detectors, &filters, false).is_empty());
+        assert_eq!(scan_file(&file, &detectors, &filters, true).len(), 1);
     }
 
     #[test]
@@ -190,5 +244,34 @@ mod tests {
 
         assert_ne!(hash, "AKIA1234567890ABCDEF");
         assert_eq!(hash.len(), 40);
+    }
+
+    #[test]
+    fn string_scan_reports_plugin_verdicts() {
+        let options = ScanOptions {
+            paths: vec![".".into()],
+            all_files: true,
+            only_allowlisted: false,
+            exclude_files: Vec::new(),
+            exclude_lines: Vec::new(),
+            exclude_secrets: Vec::new(),
+            disabled_plugins: Vec::new(),
+            base64_limit: None,
+            hex_limit: None,
+            no_verify: false,
+        };
+
+        let verdicts = scan_string("const aws = 'AKIA1234567890ABCDEF';", &options).unwrap();
+
+        assert!(
+            verdicts
+                .iter()
+                .any(|verdict| verdict.plugin_name == "AWSKeyDetector" && verdict.detected)
+        );
+        assert!(
+            verdicts
+                .iter()
+                .any(|verdict| verdict.plugin_name == "SlackDetector" && !verdict.detected)
+        );
     }
 }

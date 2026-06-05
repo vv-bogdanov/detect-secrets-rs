@@ -35,11 +35,12 @@ pub struct Finding {
     pub filename: Arc<str>,
     pub hashed_secret: String,
     pub is_verified: bool,
-    pub line_number: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub line_number: Option<usize>,
 }
 
 impl Baseline {
-    pub fn from_scan_result(result: ScanResult) -> Self {
+    pub fn from_scan_result(result: ScanResult, slim: bool) -> Self {
         let mut grouped = BTreeMap::<String, Vec<Finding>>::new();
         for finding in result.findings {
             grouped
@@ -49,6 +50,11 @@ impl Baseline {
         }
         for findings in grouped.values_mut() {
             findings.sort();
+            if slim {
+                for finding in findings {
+                    finding.line_number = None;
+                }
+            }
         }
 
         Self {

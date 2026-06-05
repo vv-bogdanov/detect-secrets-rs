@@ -203,6 +203,9 @@ upstream submodule and must preserve the benchmark gate.
 
 1. CLI parity: top-level `-v/--verbose`, `-C`, `-c/--cores`, `audit`,
    `detect-secrets-hook`, and the remaining scan flags.
+   Every newly supported CLI option must include focused unit/CLI behavior tests
+   plus an upstream syntax parity check for help text and representative parser
+   invocations.
 2. Baseline compatibility: exact output shape, load/update behavior, slim
    baselines, version upgrades, label preservation, and stable secret identity.
 3. Detector parity: port the remaining built-in upstream detectors and tighten

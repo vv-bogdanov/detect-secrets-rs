@@ -33,12 +33,21 @@ pub struct DetectorSet {
 }
 
 impl DetectorSet {
+    #[cfg(test)]
     pub fn new(disabled_plugins: &[String]) -> anyhow::Result<Self> {
+        Self::new_with_limits(disabled_plugins, None, None)
+    }
+
+    pub fn new_with_limits(
+        disabled_plugins: &[String],
+        base64_limit: Option<f64>,
+        hex_limit: Option<f64>,
+    ) -> anyhow::Result<Self> {
         let disabled = disabled_plugins
             .iter()
             .map(|name| name.to_ascii_lowercase())
             .collect::<HashSet<_>>();
-        let detectors = all_detectors()?
+        let detectors = all_detectors(base64_limit, hex_limit)?
             .into_iter()
             .filter(|detector| !disabled.contains(&detector.name.to_ascii_lowercase()))
             .collect();
@@ -191,7 +200,10 @@ struct CaptureRegex {
     group: usize,
 }
 
-fn all_detectors() -> anyhow::Result<Vec<Detector>> {
+fn all_detectors(
+    base64_limit: Option<f64>,
+    hex_limit: Option<f64>,
+) -> anyhow::Result<Vec<Detector>> {
     Ok(vec![
         Detector {
             name: "KeywordDetector",
@@ -205,7 +217,7 @@ fn all_detectors() -> anyhow::Result<Vec<Detector>> {
             prefilter: Prefilter::Entropy,
             matcher: Matcher::Entropy {
                 charset: EntropyCharset::Base64,
-                threshold: 4.5,
+                threshold: base64_limit.unwrap_or(4.5),
                 min_len: 23,
             },
         },
@@ -215,7 +227,7 @@ fn all_detectors() -> anyhow::Result<Vec<Detector>> {
             prefilter: Prefilter::Entropy,
             matcher: Matcher::Entropy {
                 charset: EntropyCharset::Hex,
-                threshold: 3.0,
+                threshold: hex_limit.unwrap_or(3.0),
                 min_len: 9,
             },
         },

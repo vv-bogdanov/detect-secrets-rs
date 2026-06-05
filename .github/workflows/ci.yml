@@ -25,6 +25,7 @@ jobs:
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test --locked
       - run: bash -n scripts/*.sh
+      - run: python3 scripts/cli-parity.py
       - run: scripts/poc-gate.sh
 
   packaging:

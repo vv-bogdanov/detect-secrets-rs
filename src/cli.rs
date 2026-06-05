@@ -20,6 +20,14 @@ pub enum Command {
 /// Raw `scan` command arguments.
 #[derive(Debug, Args)]
 pub struct ScanArgs {
+    /// Scans an individual string and prints each configured detector's verdict.
+    #[arg(long = "string", value_name = "STRING", num_args = 0..=1)]
+    pub string: Option<Option<String>>,
+
+    /// Only scan lines that are explicitly allowlisted.
+    #[arg(long = "only-allowlisted")]
+    pub only_allowlisted: bool,
+
     /// Paths to scan. Defaults to the current directory.
     #[arg(value_name = "path")]
     pub paths: Vec<PathBuf>,
@@ -44,9 +52,21 @@ pub struct ScanArgs {
     #[arg(long = "disable-plugin", value_name = "name")]
     pub disable_plugin: Vec<String>,
 
+    /// Sets the entropy limit for Base64HighEntropyString.
+    #[arg(long = "base64-limit", value_name = "BASE64_LIMIT", value_parser = parse_entropy_limit)]
+    pub base64_limit: Option<f64>,
+
+    /// Sets the entropy limit for HexHighEntropyString.
+    #[arg(long = "hex-limit", value_name = "HEX_LIMIT", value_parser = parse_entropy_limit)]
+    pub hex_limit: Option<f64>,
+
     /// Accepted for upstream CLI compatibility. The POC does not perform online verification.
     #[arg(short = 'n', long = "no-verify")]
     pub no_verify: bool,
+
+    /// Omit line numbers from the generated baseline.
+    #[arg(long = "slim")]
+    pub slim: bool,
 
     /// Print all built-in detector names and exit.
     #[arg(long = "list-all-plugins")]
@@ -54,14 +74,17 @@ pub struct ScanArgs {
 }
 
 /// Normalized scan options used by the library pipeline.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ScanOptions {
     pub paths: Vec<PathBuf>,
     pub all_files: bool,
+    pub only_allowlisted: bool,
     pub exclude_files: Vec<String>,
     pub exclude_lines: Vec<String>,
     pub exclude_secrets: Vec<String>,
     pub disabled_plugins: Vec<String>,
+    pub base64_limit: Option<f64>,
+    pub hex_limit: Option<f64>,
     pub no_verify: bool,
 }
 
@@ -70,10 +93,13 @@ impl ScanOptions {
         Self {
             paths: default_paths(args.paths),
             all_files: args.all_files,
+            only_allowlisted: args.only_allowlisted,
             exclude_files: split_values(args.exclude_files),
             exclude_lines: split_values(args.exclude_lines),
             exclude_secrets: split_values(args.exclude_secrets),
             disabled_plugins: split_values(args.disable_plugin),
+            base64_limit: args.base64_limit,
+            hex_limit: args.hex_limit,
             no_verify: args.no_verify,
         }
     }
@@ -101,6 +127,16 @@ fn split_values(values: Vec<String>) -> Vec<String> {
         .collect()
 }
 
+fn parse_entropy_limit(value: &str) -> Result<f64, String> {
+    let limit = value
+        .parse::<f64>()
+        .map_err(|_| format!("{value} must be a number between 0.0 and 8.0"))?;
+    if !(0.0..=8.0).contains(&limit) {
+        return Err(format!("{value} must be between 0.0 and 8.0"));
+    }
+    Ok(limit)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -108,13 +144,18 @@ mod tests {
     #[test]
     fn defaults_path_to_current_directory() {
         let options = ScanOptions::from_args(ScanArgs {
+            string: None,
+            only_allowlisted: false,
             paths: Vec::new(),
             all_files: false,
             exclude_files: Vec::new(),
             exclude_lines: Vec::new(),
             exclude_secrets: Vec::new(),
             disable_plugin: Vec::new(),
+            base64_limit: None,
+            hex_limit: None,
             no_verify: false,
+            slim: false,
             list_all_plugins: false,
         });
 
@@ -127,5 +168,12 @@ mod tests {
             split_values(vec!["A,B".to_string(), " C ".to_string()]),
             vec!["A", "B", "C"]
         );
+    }
+
+    #[test]
+    fn rejects_entropy_limit_outside_upstream_range() {
+        assert!(parse_entropy_limit("-0.1").is_err());
+        assert!(parse_entropy_limit("8.1").is_err());
+        assert_eq!(parse_entropy_limit("4.5").unwrap(), 4.5);
     }
 }
