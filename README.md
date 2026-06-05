@@ -14,6 +14,28 @@ The implementation follows the project plan in `PLAN.md`: coverage-first
 compatibility, no raw secrets in output, simple native detectors, deterministic
 baseline-like JSON, and benchmark-driven scope decisions.
 
+## Install
+
+The first release is a `scan`-focused POC release, not full upstream
+`detect-secrets` compatibility.
+
+```bash
+cargo install detect-secrets-rs --locked
+npm install -g detect-secrets-rs
+pip install detect-secrets-rs
+```
+
+The npm package is a small wrapper around platform-specific optional native
+packages. The initial prebuilt package names are:
+
+- `detect-secrets-rs-linux-x64`
+- `detect-secrets-rs-linux-arm64`
+- `detect-secrets-rs-darwin-x64`
+- `detect-secrets-rs-darwin-arm64`
+- `detect-secrets-rs-win`
+
+Unsupported npm platforms should use the Cargo install path.
+
 ## POC Checks
 
 Run the fast local POC gate:
@@ -50,3 +72,20 @@ extra findings are reported separately.
 
 `scripts/public-bench-suite.sh` pins its benchmark repositories to reviewed
 commits and checks them out under `.bench/`.
+
+## Release Checks
+
+Run the local release gate before publishing:
+
+```bash
+scripts/release-gate.sh
+FULL=1 scripts/release-gate.sh
+```
+
+`FULL=1` also runs the real compatibility matrix and public benchmark suite.
+Release packaging is configured for:
+
+- Cargo crate dry-run/publish;
+- npm wrapper plus prebuilt optional packages;
+- Python wheels via `maturin` binary bindings;
+- GitHub Release binary archives and checksums.

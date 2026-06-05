@@ -1,0 +1,261 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish packages and create the GitHub Release"
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: write
+  id-token: write
+
+env:
+  PUBLISH: ${{ github.event_name == 'push' || github.event.inputs.publish == 'true' }}
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.85
+          components: rustfmt, clippy
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test --locked
+      - run: scripts/poc-gate.sh
+      - run: cargo publish --dry-run --locked
+      - run: npm run npm:smoke
+      - run: scripts/python-smoke.sh
+
+  cargo-publish:
+    needs: preflight
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.85
+      - name: Publish or dry-run Cargo crate
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ "$PUBLISH" == "true" ]]; then
+            cargo publish --locked
+          else
+            cargo publish --dry-run --locked
+          fi
+
+  npm-prebuilt:
+    needs: preflight
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target_key: linux-x64
+            rust_target: x86_64-unknown-linux-gnu
+            runner: ubuntu-24.04
+            binary: detect-secrets-rs
+          - target_key: linux-arm64
+            rust_target: aarch64-unknown-linux-gnu
+            runner: ubuntu-22.04-arm
+            binary: detect-secrets-rs
+          - target_key: darwin-x64
+            rust_target: x86_64-apple-darwin
+            runner: macos-15-intel
+            binary: detect-secrets-rs
+          - target_key: darwin-arm64
+            rust_target: aarch64-apple-darwin
+            runner: macos-15
+            binary: detect-secrets-rs
+          - target_key: win32-x64-msvc
+            rust_target: x86_64-pc-windows-msvc
+            runner: windows-2025
+            binary: detect-secrets-rs.exe
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.85
+          targets: ${{ matrix.rust_target }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+      - run: cargo build --release --locked --target "${{ matrix.rust_target }}"
+        shell: bash
+      - name: Generate npm platform package
+        shell: bash
+        env:
+          TARGET_KEY: ${{ matrix.target_key }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-bin artifacts
+          cp "target/${{ matrix.rust_target }}/release/${{ matrix.binary }}" release-bin/
+          node scripts/npm-prebuilt-package.mjs \
+            --target "$TARGET_KEY" \
+            --bin-dir release-bin \
+            --out-dir npm-packages
+          tar -C release-bin -czf "artifacts/detect-secrets-rs-$TARGET_KEY.tar.gz" .
+          PACKAGE_NAME="$(node -e "const targets=require('./npm/prebuilt-targets.json'); process.stdout.write(targets[process.env.TARGET_KEY].packageName)")"
+          npm pack --json "npm-packages/$PACKAGE_NAME" --pack-destination artifacts
+      - name: Publish or dry-run npm platform package
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          TARGET_KEY: ${{ matrix.target_key }}
+        run: |
+          set -euo pipefail
+          PACKAGE_NAME="$(node -e "const targets=require('./npm/prebuilt-targets.json'); process.stdout.write(targets[process.env.TARGET_KEY].packageName)")"
+          PACKAGE_DIR="npm-packages/$PACKAGE_NAME"
+          if [[ "$PUBLISH" == "true" ]]; then
+            npm publish --provenance --access public "$PACKAGE_DIR"
+          else
+            npm publish --dry-run --json "$PACKAGE_DIR"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-${{ matrix.target_key }}
+          path: artifacts/*
+
+  npm-main:
+    needs: npm-prebuilt
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.85
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+      - run: cargo build --release --locked
+      - run: npm run npm:smoke
+      - run: mkdir -p artifacts
+      - run: npm pack --json --pack-destination artifacts
+      - name: Publish or dry-run npm wrapper
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ "$PUBLISH" == "true" ]]; then
+            npm publish --provenance --access public
+          else
+            npm publish --dry-run --json
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-main
+          path: artifacts/*
+
+  python-wheels:
+    needs: preflight
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-24.04
+            manylinux: "2014"
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04
+            manylinux: "2014"
+            qemu: true
+          - target: x86_64-apple-darwin
+            runner: macos-15-intel
+            manylinux: "auto"
+          - target: aarch64-apple-darwin
+            runner: macos-15
+            manylinux: "auto"
+          - target: x86_64-pc-windows-msvc
+            runner: windows-2025
+            manylinux: "auto"
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup QEMU
+        if: ${{ matrix.qemu == true }}
+        uses: docker/setup-qemu-action@v3
+      - uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          maturin-version: v1.11.5
+          rust-toolchain: 1.85
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.manylinux }}
+          args: --release --locked --compatibility pypi --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-${{ matrix.target }}
+          path: dist/*
+
+  python-sdist:
+    needs: preflight
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install 'maturin>=1.9,<2'
+      - run: python -m maturin sdist --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-sdist
+          path: dist/*
+
+  python-publish:
+    needs:
+      - python-wheels
+      - python-sdist
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: python-*
+          path: dist
+          merge-multiple: true
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        if: env.PUBLISH == 'true'
+        with:
+          packages-dir: dist
+
+  github-release:
+    needs:
+      - cargo-publish
+      - npm-main
+      - python-wheels
+      - python-sdist
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Generate checksums
+        run: |
+          set -euo pipefail
+          find dist -type f -print0 | sort -z | xargs -0 sha256sum > dist/SHA256SUMS
+      - uses: softprops/action-gh-release@v2
+        if: env.PUBLISH == 'true'
+        with:
+          files: dist/**

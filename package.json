@@ -1,0 +1,51 @@
+{
+  "name": "detect-secrets-rs",
+  "version": "0.1.0",
+  "description": "Fast native Rust POC clone of detect-secrets",
+  "author": "vvbogdanov",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vv-bogdanov/detect-secrets-rs.git"
+  },
+  "homepage": "https://github.com/vv-bogdanov/detect-secrets-rs#readme",
+  "bugs": {
+    "url": "https://github.com/vv-bogdanov/detect-secrets-rs/issues"
+  },
+  "keywords": [
+    "detect-secrets",
+    "detect-secrets-rs",
+    "secrets",
+    "secret-scanner",
+    "security",
+    "cli",
+    "rust",
+    "fast"
+  ],
+  "optionalDependencies": {
+    "detect-secrets-rs-darwin-arm64": "0.1.0",
+    "detect-secrets-rs-darwin-x64": "0.1.0",
+    "detect-secrets-rs-linux-arm64": "0.1.0",
+    "detect-secrets-rs-linux-x64": "0.1.0",
+    "detect-secrets-rs-win": "0.1.0"
+  },
+  "bin": {
+    "detect-secrets-rs": "npm/bin/detect-secrets-rs.js"
+  },
+  "files": [
+    "LICENSE",
+    "README.md",
+    "npm/**",
+    "package.json"
+  ],
+  "scripts": {
+    "npm:prebuilt": "node scripts/npm-prebuilt-package.mjs",
+    "npm:smoke": "node scripts/npm-smoke.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
