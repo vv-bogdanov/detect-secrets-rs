@@ -23,17 +23,17 @@ jobs:
   preflight:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.85
           components: rustfmt, clippy
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "20"
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - run: cargo fmt --check
@@ -48,7 +48,7 @@ jobs:
     needs: preflight
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.85
@@ -91,12 +91,12 @@ jobs:
             binary: detect-secrets-rs.exe
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.85
           targets: ${{ matrix.rust_target }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "20"
           registry-url: "https://registry.npmjs.org"
@@ -131,7 +131,7 @@ jobs:
           else
             npm publish --dry-run --json "$PACKAGE_DIR"
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: npm-${{ matrix.target_key }}
           path: artifacts/*
@@ -140,11 +140,11 @@ jobs:
     needs: npm-prebuilt
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.85
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "20"
           registry-url: "https://registry.npmjs.org"
@@ -162,7 +162,7 @@ jobs:
           else
             npm publish --dry-run --json
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: npm-main
           path: artifacts/*
@@ -191,10 +191,10 @@ jobs:
             manylinux: "auto"
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Setup QEMU
         if: ${{ matrix.qemu == true }}
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
       - uses: PyO3/maturin-action@v1
         with:
           command: build
@@ -203,7 +203,7 @@ jobs:
           target: ${{ matrix.target }}
           manylinux: ${{ matrix.manylinux }}
           args: --release --locked --compatibility pypi --out dist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: python-${{ matrix.target }}
           path: dist/*
@@ -212,13 +212,13 @@ jobs:
     needs: preflight
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - run: python -m pip install 'maturin>=1.9,<2'
       - run: python -m maturin sdist --out dist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: python-sdist
           path: dist/*
@@ -229,12 +229,12 @@ jobs:
       - python-sdist
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: python-*
           path: dist
           merge-multiple: true
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: pypa/gh-action-pypi-publish@v1.14.0
         if: env.PUBLISH == 'true'
         with:
           packages-dir: dist
@@ -247,7 +247,7 @@ jobs:
       - python-sdist
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
@@ -255,7 +255,7 @@ jobs:
         run: |
           set -euo pipefail
           find dist -type f -print0 | sort -z | xargs -0 sha256sum > dist/SHA256SUMS
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         if: env.PUBLISH == 'true'
         with:
           files: dist/**
