@@ -216,8 +216,8 @@ Main package:
 
 Prebuilt optional packages:
 
-- `detect-secrets-rs-linux-x64-gnu`
-- `detect-secrets-rs-linux-arm64-gnu`
+- `detect-secrets-rs-linux-x64`
+- `detect-secrets-rs-linux-arm64`
 - `detect-secrets-rs-darwin-x64`
 - `detect-secrets-rs-darwin-arm64`
 - `detect-secrets-rs-win`
@@ -233,12 +233,16 @@ constraints. The main package should list all prebuilt packages in
 `optionalDependencies`, select the matching package at runtime, and print a
 clear Cargo fallback message on unsupported platforms.
 
+The first Linux npm packages are glibc builds even though the package names omit
+the `gnu` suffix. Keep the exact ABI in package metadata and release scripts; if
+musl builds are added later, publish explicit `*-musl` packages.
+
 Initial npm target matrix:
 
 | Package | Rust target | Runner |
 | --- | --- | --- |
-| `detect-secrets-rs-linux-x64-gnu` | `x86_64-unknown-linux-gnu` | `ubuntu-24.04` |
-| `detect-secrets-rs-linux-arm64-gnu` | `aarch64-unknown-linux-gnu` | `ubuntu-22.04-arm` |
+| `detect-secrets-rs-linux-x64` | `x86_64-unknown-linux-gnu` | `ubuntu-24.04` |
+| `detect-secrets-rs-linux-arm64` | `aarch64-unknown-linux-gnu` | `ubuntu-22.04-arm` |
 | `detect-secrets-rs-darwin-x64` | `x86_64-apple-darwin` | `macos-15-intel` |
 | `detect-secrets-rs-darwin-arm64` | `aarch64-apple-darwin` | `macos-15` |
 | `detect-secrets-rs-win` | `x86_64-pc-windows-msvc` | `windows-2025` |
