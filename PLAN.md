@@ -189,7 +189,89 @@ After the speed decision, move toward a real MVP:
 - `audit --stats`, `audit --report`, `audit --json`;
 - public compatibility report;
 - public benchmark report;
-- npm/Cargo install flow only after the CLI is stable.
+- Cargo/npm/PyPI install flow only after the CLI is stable.
+
+## First Release Packaging Plan
+
+The first public release should optimize for easy installation without adding
+runtime compatibility promises beyond the documented `scan` scope.
+
+Supported install paths:
+
+- Cargo: `cargo install detect-secrets-rs --locked`.
+- npm: `npm install -g detect-secrets-rs` / `npx detect-secrets-rs`.
+- Python: `pip install detect-secrets-rs`, installing the CLI binary into the
+  active environment path.
+- GitHub Releases: archives and checksums for direct binary downloads.
+
+### npm Package Layout
+
+Follow the `jscpd-rs` prebuilt package pattern: one small main wrapper package
+plus platform-specific optional packages. Do not use install-time native builds
+or postinstall downloads for the default path.
+
+Main package:
+
+- `detect-secrets-rs`
+
+Prebuilt optional packages:
+
+- `detect-secrets-rs-linux-x64-gnu`
+- `detect-secrets-rs-linux-arm64-gnu`
+- `detect-secrets-rs-darwin-x64`
+- `detect-secrets-rs-darwin-arm64`
+- `detect-secrets-rs-win`
+
+Keep npm package names short and simple enough to avoid registry/package spam
+heuristics. In particular, do not publish a long Windows package name such as
+`detect-secrets-rs-win32-x64-msvc`; use `detect-secrets-rs-win` and keep the
+exact Rust target (`x86_64-pc-windows-msvc`) in package metadata and release
+scripts.
+
+Each prebuilt package should declare npm `os`, `cpu`, and, for Linux, `libc`
+constraints. The main package should list all prebuilt packages in
+`optionalDependencies`, select the matching package at runtime, and print a
+clear Cargo fallback message on unsupported platforms.
+
+Initial npm target matrix:
+
+| Package | Rust target | Runner |
+| --- | --- | --- |
+| `detect-secrets-rs-linux-x64-gnu` | `x86_64-unknown-linux-gnu` | `ubuntu-24.04` |
+| `detect-secrets-rs-linux-arm64-gnu` | `aarch64-unknown-linux-gnu` | `ubuntu-22.04-arm` |
+| `detect-secrets-rs-darwin-x64` | `x86_64-apple-darwin` | `macos-15-intel` |
+| `detect-secrets-rs-darwin-arm64` | `aarch64-apple-darwin` | `macos-15` |
+| `detect-secrets-rs-win` | `x86_64-pc-windows-msvc` | `windows-2025` |
+
+Linux musl, Windows arm64, and extra package managers should wait for install
+data or user reports.
+
+### Python Package Layout
+
+Use `maturin` with `bin` bindings for the first Python release. The Python
+package should install the CLI binary, not expose a Python API yet. A native
+Python API can be added later after the CLI and baseline contracts stabilize.
+
+Build wheels for the same OS/architecture set as npm where practical. Linux
+wheels must be manylinux/musllinux compatible. The source distribution should
+build from Cargo for unsupported platforms.
+
+### Release Gates
+
+Before publishing `v0.1.0`:
+
+- `scripts/poc-gate.sh` passes.
+- `REAL=1 scripts/compat-matrix.sh` passes with `missing=0`.
+- `RUNS=3 scripts/public-bench-suite.sh` shows no sustained speed regression.
+- `cargo publish --dry-run --locked` passes.
+- `npm pack` and `npm publish --dry-run --json` pass for the main package and
+  every prebuilt optional package.
+- Local npm install smoke passes for the main wrapper plus a generated platform
+  package, with no install-time build scripts.
+- `maturin build --release` produces installable wheels and `pip install`
+  smoke passes from a clean virtual environment.
+- GitHub Release archives, checksums, and package versions all match the same
+  tag.
 
 ## Open Questions
 
@@ -199,3 +281,5 @@ After the speed decision, move toward a real MVP:
   expose `detect-secrets` after compatibility improves?
 - How much baseline byte-level compatibility is necessary before publishing?
 - Should online verification ever be implemented, or left to upstream/Python?
+- Should prebuilt npm packages keep the full `detect-secrets-rs-*` prefix, or
+  move to an even shorter prefix if npm registry checks flag the longer names?
