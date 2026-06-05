@@ -258,7 +258,11 @@ jobs:
       - name: Generate checksums
         run: |
           set -euo pipefail
-          find dist -type f -print0 | sort -z | xargs -0 sha256sum > dist/SHA256SUMS
+          (
+            cd dist
+            find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum
+          ) > dist/SHA256SUMS
+          (cd dist && sha256sum -c SHA256SUMS)
       - uses: actions/upload-artifact@v7
         with:
           name: release-dist
