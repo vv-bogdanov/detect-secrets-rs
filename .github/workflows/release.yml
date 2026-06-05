@@ -40,6 +40,23 @@ jobs:
       - run: python scripts/assert-release-version.py
         env:
           REQUIRE_RELEASE_TAG: ${{ env.PUBLISH }}
+      - name: Validate publish credentials
+        if: env.PUBLISH == 'true'
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in CARGO_REGISTRY_TOKEN NPM_TOKEN; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error title=Missing release secret::$name must be configured before publishing"
+              missing=1
+            fi
+          done
+          if [[ "$missing" -ne 0 ]]; then
+            exit 1
+          fi
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test --locked
