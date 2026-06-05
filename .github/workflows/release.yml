@@ -38,6 +38,8 @@ jobs:
           python-version: "3.12"
       - run: python -m pip install -r detect-secrets/requirements-dev.txt
       - run: python scripts/assert-release-version.py
+        env:
+          REQUIRE_RELEASE_TAG: ${{ env.PUBLISH }}
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test --locked

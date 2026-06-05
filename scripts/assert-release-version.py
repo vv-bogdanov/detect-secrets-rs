@@ -86,7 +86,17 @@ def main() -> int:
             print(f"  {mismatch}", file=sys.stderr)
         return 1
 
-    tag_name = os.environ.get("RELEASE_TAG") or os.environ.get("GITHUB_REF_NAME")
+    tag_name = os.environ.get("RELEASE_TAG")
+    github_ref_type = os.environ.get("GITHUB_REF_TYPE")
+    github_ref_name = os.environ.get("GITHUB_REF_NAME")
+    if tag_name is None and github_ref_type == "tag":
+        tag_name = github_ref_name
+
+    require_release_tag = os.environ.get("REQUIRE_RELEASE_TAG", "").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
     if tag_name:
         if not tag_name.startswith("v"):
             print(f"release tag must start with 'v': {tag_name}", file=sys.stderr)
@@ -98,6 +108,9 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 1
+    elif require_release_tag:
+        print("publishing requires a v* release tag", file=sys.stderr)
+        return 1
 
     print(f"release version ok: {expected}")
     return 0

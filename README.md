@@ -90,8 +90,8 @@ Release packaging is configured for:
 - Python wheels via `maturin` binary bindings;
 - GitHub Release binary archives and checksums.
 
-The release workflow publishes only from `v*` tags or manual runs with
-`publish=true`. Before publishing, configure:
+The release workflow publishes only from `v*` tags. Manual runs with
+`publish=true` must also target a `v*` tag ref. Before publishing, configure:
 
 - `CARGO_REGISTRY_TOKEN` for crates.io;
 - `NPM_TOKEN` for npm;
