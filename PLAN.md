@@ -264,6 +264,7 @@ build from Cargo for unsupported platforms.
 
 Before publishing `v0.1.0`:
 
+- `scripts/assert-release-version.py` passes and rejects mismatched `v*` tags.
 - `scripts/poc-gate.sh` passes.
 - `REAL=1 scripts/compat-matrix.sh` passes with `missing=0`.
 - `RUNS=3 scripts/public-bench-suite.sh` shows no sustained speed regression.

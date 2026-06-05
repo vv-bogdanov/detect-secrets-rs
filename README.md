@@ -89,3 +89,14 @@ Release packaging is configured for:
 - npm wrapper plus prebuilt optional packages;
 - Python wheels via `maturin` binary bindings;
 - GitHub Release binary archives and checksums.
+
+The release workflow publishes only from `v*` tags or manual runs with
+`publish=true`. Before publishing, configure:
+
+- `CARGO_REGISTRY_TOKEN` for crates.io;
+- `NPM_TOKEN` for npm;
+- PyPI trusted publishing for `.github/workflows/release.yml`.
+
+Package versions are guarded against the release tag. For `v0.1.0`,
+`Cargo.toml`, `package.json`, `pyproject.toml`, and npm optional dependency
+versions must all be `0.1.0`.

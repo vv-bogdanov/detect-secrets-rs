@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+python3 scripts/assert-release-version.py
 scripts/poc-gate.sh
 cargo publish --dry-run --locked
 npm run npm:smoke

@@ -40,6 +40,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+      - run: python scripts/assert-release-version.py
       - run: cargo build --release --locked
       - run: npm run npm:smoke
       - run: scripts/python-smoke.sh
