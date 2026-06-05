@@ -171,7 +171,11 @@ project is worth continuing.
 - Never store raw secrets in generated baselines.
 - Mask secret values in diagnostics.
 - Keep verification/network checks out of the POC.
-- Treat dynamic plugin/filter loading as security-sensitive and non-MVP.
+- Do not implement dynamic Python plugin/filter loading. It is
+  security-sensitive, hard to make fast, and would pull the Rust clone back
+  into Python runtime compatibility instead of native performance.
+- For extensibility, design native Rust detector/filter plugin options and get
+  the approach approved before implementation.
 
 ## If POC Succeeds: MVP Direction
 
@@ -190,6 +194,36 @@ After the speed decision, move toward a real MVP:
 - public compatibility report;
 - public benchmark report;
 - Cargo/npm/PyPI install flow only after the CLI is stable.
+
+## Full Upstream Compatibility Roadmap
+
+After the first scan-focused release, full practical compatibility should be
+closed in layers. Each layer needs focused compatibility fixtures against the
+upstream submodule and must preserve the benchmark gate.
+
+1. CLI parity: top-level `-v/--verbose`, `-C`, `-c/--cores`, `audit`,
+   `detect-secrets-hook`, and the remaining scan flags.
+2. Baseline compatibility: exact output shape, load/update behavior, slim
+   baselines, version upgrades, label preservation, and stable secret identity.
+3. Detector parity: port the remaining built-in upstream detectors and tighten
+   edge-case behavior for already-ported detectors.
+4. Filter parity: port upstream default filters, regex filters, allowlisting,
+   optional wordlist/gibberish-style filters, and disable-filter semantics.
+5. Online verification: add only as an explicit, timeout-bound, controlled path
+   with no generic unknown-secret exfiltration.
+6. Pre-commit hook parity: `detect-secrets-hook`, staged file scanning,
+   baseline diffing, baseline trim/update, JSON diagnostics, and exit codes.
+7. Audit workflow: interactive audit, `--diff`, `--stats`, `--report`,
+   `--only-real`, `--only-false`, and JSON analytics.
+8. Transformers and file semantics: YAML/config transformers, string scanning,
+   allowlisted-only scanning, diff scanning, root-relative paths, and symlink
+   behavior.
+9. Native Rust plugin/filter extensibility: do not load dynamic Python plugins
+   or filters. Instead, develop and approve native Rust extension options
+   before implementation. Candidate directions include compiled Rust crates
+   behind stable traits, a safe process/plugin protocol, or a constrained WASM
+   plugin ABI. The selected model must be fast, testable, packageable, and
+   explicit about trust boundaries.
 
 ## First Release Packaging Plan
 
